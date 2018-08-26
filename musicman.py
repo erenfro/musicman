@@ -50,7 +50,7 @@ def clearLine():
 
 def sanitize(text):
 	newtext = text
-	newtext = newtext.replace('<', '').replace('>', '').replace(':', '').replace('"', '').replace('|', '').replace('?', '').replace('*', '')
+	newtext = newtext.replace('<', '').replace('>', '').replace(':', '').replace('"', '').replace('|', '').replace('?', '').replace('*', '').replace('$', '')
 	newtext = newtext.replace('/', '-')
 	newtext = newtext.strip()
 	#if newtext != text:
@@ -59,12 +59,27 @@ def sanitize(text):
 	#	print(" new:", newtext)
 	return newtext
 
-def getLibrary(path, excludeDirs=[]):
+def escape(text):
+	newtext = text
+	newtext = newtext.replace('$', '\$')
+	return newtext
+
+def getLibrary(path, libFormat=None, excludeDirs=[], includeDirs=[]):
+	#print("DEBUG: libFormat={0}".format(libFormat)) 
+	global originFormat;
 	if os.path.isdir(path):
 		for root, directories, filenames in sorted(os.walk(path)):
 			if root not in excludeDirs:
-				for filename in filenames:
-					yield os.path.join(root, filename)
+				#if any(root in s for s in includeDirs):
+				#if [s for s in [root] if any (xs in s for xs in includeDirs)] or len(includeDirs) == 0:
+				#	print("DEBUG: Matched: {0}".format(root))
+				#print("DEBUG: Found: {0}".format(root))
+				#if any(root in s for s in includeDirs) or len(includeDirs) == 0:
+				if [s for s in [root] if any (xs in s for xs in includeDirs)] or len(includeDirs) == 0:
+					for filename in filenames:
+						#print("DEBUG: filename: {0}".format(filename))
+						if filename.endswith(libFormat):
+							yield os.path.join(root, filename)
 	
 # 	files=[]
 # 	
@@ -94,6 +109,16 @@ def getLibrary(path, excludeDirs=[]):
 # 		clearLine()
 # 		print("Scan complete!")
 # 		return files
+
+def ensure_dir(file_path):
+	directory = os.path.dirname(file_path)
+	if not os.path.exists(directory):
+		os.makedirs(directory)
+
+def copy_file(src, dest):
+	from shutil import copyfile
+	ensure_dir(dest)
+	copyfile(src, dest)
 
 def getEmptyDirs(path, excludeDirs=[]):
 	if os.path.isdir(path):
@@ -148,13 +173,11 @@ def getSong(file, orgDir=None, tmpDir=None, dstDir=None):
 			
 			if song['totaldiscs'] > 1:
 				song['outPath'] = os.path.join(song['artistName'], song['albumName'])
-				song['outFile'] = '{0:d}-{1:02d}-{2}'.format(song['discnumber'],
-																song['tracknumber'],
-																song['titleName'])
+				song['outFile'] = '{0:d}-{1:02d}-{2}'.format(song['discnumber'], song['tracknumber'], song['titleName'])
 			else:
 				if metadata.tags.get("tracknumber") is not None:
 					song['outPath'] = os.path.join(song['artistName'], song['albumName'])
-					song['outFile'] = '{0:02d}-{1}'.format(song['tracknumber'], song['titleName']) 
+					song['outFile'] = '{0:d}-{1:02d}-{2}'.format(song['discnumber'], song['tracknumber'], song['titleName']) 
 				else:
 					song['outPath'] = os.path.join(song['artistName'], song['albumName'])
 					outFile = '{0}'.format(song['titleName'])
@@ -164,6 +187,7 @@ def getSong(file, orgDir=None, tmpDir=None, dstDir=None):
 			song['targetFile'] = os.path.join(dstDir, song['outPath'], song['outFile'])
 			song['originExt'] = os.path.splitext(file)[1]
 			song['targetExt'] = '.' + targetFormat
+			song['targetDir'] = targetDir
 			
 			return song
 	else:
@@ -202,14 +226,16 @@ def cleanLibrary(rootDir, excludeDirs=[], act=False, verbose=0):
 	
 	#print("Processing Complete!")
 	
-def renameLibrary(rootDir, excludeDirs=[], act=False, verbose=0):
+def renameLibrary(rootDir, libFormat, excludeDirs=[], includeDirs=[], act=False, verbose=0):
 	global config
 	
 	if excludeDirs is None:
 		excludeDirs=[]
+	if includeDirs is None:
+		includeDirs=[]
 	
 	print("Renaming:", rootDir)
-	for file in getLibrary(rootDir, excludeDirs):
+	for file in getLibrary(rootDir, libFormat, excludeDirs, includeDirs):
 		if (os.path.isdir(os.path.dirname(file)) and os.path.isfile(file)):
 			clearLine()
 			print("Processing:", os.path.dirname(os.path.dirname(file)), next(spinner), end="\r")
@@ -239,14 +265,16 @@ def renameLibrary(rootDir, excludeDirs=[], act=False, verbose=0):
 	clearLine()
 	#print("Processing Complete!")
 
-def findUntagged(rootDir, excludeDirs=[], verbose=0):
+def findUntagged(rootDir, libFormat, excludeDirs=[], includeDirs=[], verbose=0):
 	global config
 	
 	if excludeDirs is None:
 		excludeDirs=[]
+	if includeDirs is None:
+		includeDirs=[]
 	
 	print("Find Untagged:", rootDir)
-	for file in getLibrary(rootDir, excludeDirs):
+	for file in getLibrary(rootDir, libFormat, excludeDirs, includeDirs):
 		if (os.path.isdir(os.path.dirname(file)) and os.path.isfile(file)):
 			clearLine()
 			print("Processing:", os.path.dirname(os.path.dirname(file)), next(spinner), end="\r")
@@ -260,14 +288,16 @@ def findUntagged(rootDir, excludeDirs=[], verbose=0):
 	clearLine()
 	#print("Processing Complete!")
 
-def findNew(rootDir, tmpDir, dstDir, dstFormat, excludeDirs=[], verbose=0):
+def findNew(rootDir, libFormat, tmpDir, dstDir, dstFormat, excludeDirs=[], includeDirs=[], verbose=0):
 	global config
 	
 	if excludeDirs is None:
 		excludeDirs=[]
+	if includeDirs is None:
+		includeDirs=[]
 	
 	print("Find New Media")
-	for file in getLibrary(rootDir, excludeDirs):
+	for file in getLibrary(rootDir, libFormat, excludeDirs, includeDirs):
 		if (os.path.isdir(os.path.dirname(file)) and os.path.isfile(file)):
 			clearLine()
 			print("Processing:", os.path.dirname(os.path.dirname(file)), next(spinner), end="\r")
@@ -292,15 +322,17 @@ def findNew(rootDir, tmpDir, dstDir, dstFormat, excludeDirs=[], verbose=0):
 	#clearLine()
 	#print("Processing Complete!")
 
-def syncWorking(tmpDir, excludeDirs=[], act=False, verbose=0):
+def syncWorking(tmpDir, libFormat, excludeDirs=[], includeDirs=[], act=False, verbose=0):
 	global config
 	
 	if excludeDirs is None:
 		excludeDirs=[]
+	if includeDirs is None:
+		includeDirs=[]
 	
 	print("Sync Target Media")
 	
-	for file in getLibrary(tmpDir, excludeDirs):
+	for file in getLibrary(tmpDir, libFormat, excludeDirs, includeDirs):
 		if (os.path.isdir(os.path.dirname(file)) and os.path.isfile(file)):
 			clearLine()
 			print("Processing:", os.path.dirname(os.path.dirname(file)), next(spinner), end="\r")
@@ -315,13 +347,14 @@ def syncWorking(tmpDir, excludeDirs=[], act=False, verbose=0):
 				filename = os.path.basename(file)
 				file_ext = os.path.splitext(filename)[1]
 				
-				if not os.path.isfile(song['targetDir'] + song['originExt']):
+				if not os.path.isfile(song['targetFile'] + song['originExt']):
 					print("Sync:", file)
 					if verbose > 0:
-						print("  To:", song['targetFile'], song['originExt'])
+						print("  To:", song['targetFile'] + song['originExt'])
 					
 					if act:
-						print("would've acted")
+						copy_file(file, song['targetFile'] + song['originExt'])
+						#print("would've acted")
 					
 					
 				#if not os.path.isfile(os.path.join(destDir, song['outPath'], song['outFile'] + file_ext)):
@@ -335,7 +368,7 @@ def syncWorking(tmpDir, excludeDirs=[], act=False, verbose=0):
 	#clearLine()
 	#print("Processing Complete!")
 
-def convertMedia(rootDir, tmpDir, dstDir, dstFormat, excludeDirs=[], act=False, verbose=0):
+def convertMedia(rootDir, originFormat, tmpDir, dstDir, dstFormat, excludeDirs=[], includeDirs=[], act=False, verbose=0):
 	import subprocess
 	from musicman.utils.copytags import (
 		copy_tags
@@ -343,10 +376,12 @@ def convertMedia(rootDir, tmpDir, dstDir, dstFormat, excludeDirs=[], act=False, 
 	
 	if excludeDirs is None:
 		excludeDirs=[]
+	if includeDirs is None:
+		includeDirs=[]
 	
 	print("Convert Library Media")
 
-	for file in getLibrary(rootDir, excludeDirs):
+	for file in getLibrary(rootDir, originFormat, excludeDirs, includeDirs):
 		if (os.path.isdir(os.path.dirname(file)) and os.path.isfile(file)):
 			clearLine()
 			print("Processing:", os.path.dirname(os.path.dirname(file)), next(spinner), end="\r")
@@ -374,7 +409,9 @@ def convertMedia(rootDir, tmpDir, dstDir, dstFormat, excludeDirs=[], act=False, 
 							os.makedirs(os.path.dirname(song['workingFile']))
 						#subprocess.call("ffmpeg", "-loglevel", "quiet", "-stats", "-i", file, "-vn", "-c:a", "libfdk_aac", "-vbr", "5", "-nostdin", "-y", song['workingFile'] + song['targetExt'])
 						try:
-							subprocess.call('/usr/bin/ffmpeg -loglevel quiet -stats -i "{0}" -vn -c:a libfdk_aac -vbr 5 -nostdin -y "{1}"'.format(file, song['workingFile'] + song['targetExt']), shell=True)
+							#subprocess.call('/usr/bin/ffmpeg -loglevel quiet -stats -i "{0}" -vn -c:a libfdk_aac -vbr 5 -nostdin -y "{1}"'.format(file, song['workingFile'] + song['targetExt']), shell=True)
+							#subprocess.call('/usr/bin/ffmpeg -i "{0}" -f caf - | /usr/bin/fdkaac -I -p 29 -m 5 -o "{1}" -'.format(file, song['workingFile'] + song['targetExt']), shell=True)
+							subprocess.call('/usr/bin/ffmpeg -i "{0}" -f caf - | /usr/bin/fdkaac -I -p 2 -m 5 -o "{1}" -'.format(escape(file), escape(song['workingFile'] + song['targetExt'])), shell=True)
 							#new = MetaData(song['workingFile'] + song['targetExt'])
 							#new.update(song['metadata'])
 							#new.save()
@@ -397,7 +434,7 @@ def convertMedia(rootDir, tmpDir, dstDir, dstFormat, excludeDirs=[], act=False, 
 if __name__ == '__main__':
 	global opt
 	global config
-	global originPath, targetPath, targetFormat, workPath
+	global originPath, originFormat, targetPath, targetFormat, workPath
 	import configparser
 	
 	opt = musicman.utils.parse_args()
@@ -409,6 +446,11 @@ if __name__ == '__main__':
 		originDir = config['origin']['path'] if opt.originDir is None else opt.originDir
 	except AttributeError:
 		originDir = config['origin']['path']
+	
+	try:
+		originFormat = config['origin']['format'] if opt.origFormat is None else opt.origFormat
+	except AttributeError:
+		originFormat = config['origin']['format']
 	
 	try:
 		targetDir = config['target']['path'] if opt.targetDir is None else opt.targetDir
@@ -432,30 +474,30 @@ if __name__ == '__main__':
 	
 	try:
 		if opt.mode == 'clean':
-			cleanLibrary(originDir, opt.excludeDirs, opt.act, opt.verbose)
-			cleanLibrary(targetDir, opt.excludeDirs, opt.act, opt.verbose)
-			cleanLibrary(workingDir, opt.excludeDirs, opt.act, opt.verbose)
+			cleanLibrary(originDir, originFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
+			cleanLibrary(targetDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
+			cleanLibrary(workingDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
 		
 		elif opt.mode == 'rename':
-			renameLibrary(originDir, opt.excludeDirs, opt.act, opt.verbose)
-			renameLibrary(targetDir, opt.excludeDirs, opt.act, opt.verbose)
-			renameLibrary(workingDir, opt.excludeDirs, opt.act, opt.verbose)
+			renameLibrary(originDir, originFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
+			renameLibrary(targetDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
+			renameLibrary(workingDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
 		
 		elif opt.mode == 'scan':
 			if opt.scanMode is None:
 				print("ERROR: Subcommand for scan not provided.")
 				sys.exit(1)
 			elif opt.scanMode == 'untagged':
-				findUntagged(originDir, opt.excludeDirs, opt.verbose)
-				findUntagged(targetDir, opt.excludeDirs, opt.verbose)
-				findUntagged(workingDir, opt.excludeDirs, opt.verbose)
+				findUntagged(originDir, originFormat, opt.excludeDirs, opt.includeDirs, opt.verbose)
+				findUntagged(targetDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.verbose)
+				findUntagged(workingDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.verbose)
 			elif opt.scanMode == 'new':
-				findNew(originDir, workingDir, targetDir, targetFormat, opt.excludeDirs, opt.verbose)
+				findNew(originDir, originFormat, workingDir, targetDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.verbose)
 		elif opt.mode == 'sync':
-			syncWorking(workingDir, targetDir, opt.excludeDirs, opt.act, opt.verbose)
+			syncWorking(workingDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
 		
 		elif opt.mode == 'convert':
-			convertMedia(originDir, workingDir, targetDir, targetFormat, opt.excludeDirs, opt.act, opt.verbose)
+			convertMedia(originDir, originFormat, workingDir, targetDir, targetFormat, opt.excludeDirs, opt.includeDirs, opt.act, opt.verbose)
 	except KeyboardInterrupt:
 		clearLine()
 		print(end='\r')
