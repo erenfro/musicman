@@ -34,5 +34,5 @@ and request your pull requests towards develop.
 - Python 3.3 and up.
 - mutagen
 - ffmpeg
-
+- fdkaac
 
